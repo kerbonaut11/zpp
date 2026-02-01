@@ -1,12 +1,14 @@
 const Token = @This();
+pub const Idx = u32;
 
 pub const Kind = enum(u8) {
     l_paren, r_paren,
     l_brace, r_brace,
     l_bracket, r_bracket,
 
-    plus, minus, asterix, slash, equal, bang, greater, less, ampersand, pipe, carat,
+    plus, minus, asterix, slash, equal, bang, greater, less, ampersand, pipe, carat, percent,
     equal_equal, bang_equal, greater_equal, less_equal,
+    greater_greater, less_less,
 
     ident,
     int, float,
@@ -106,6 +108,7 @@ const Tokenizer = struct {
             '-' => .minus,
             '*' => .asterix,
             '/' => .slash,
+            '%' => .percent,
             '>' => .greater,
             '<' => .less,
             '!' => .bang,
