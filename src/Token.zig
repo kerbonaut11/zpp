@@ -2,13 +2,13 @@ const Token = @This();
 pub const Idx = u32;
 
 pub const Kind = enum(u8) {
-    l_paren, r_paren,
-    l_brace, r_brace,
-    l_bracket, r_bracket,
+    @"(", @")",
+    @"{", @"}",
+    @"[", @"]",
 
-    plus, minus, asterix, slash, equal, bang, greater, less, ampersand, pipe, carat, percent,
-    equal_equal, bang_equal, greater_equal, less_equal,
-    greater_greater, less_less,
+    @"+", @"-", @"*", @"/", @"%", @"=", @"!", @">", @"<", @"&", @"|", @"^", @".",
+    @"==", @"!=", @">=", @"<=",
+    @">>", @"<<",
 
     ident,
     int, float,
@@ -39,6 +39,21 @@ const keywords = blk: {
     break :blk std.StaticStringMap(Kind).initComptime(list);
 };
 
+const single_ch_tokens = blk: {
+    @setEvalBranchQuota(1_000_000);
+
+    var tokens: [128]Kind = undefined;
+    @memset(&tokens, .invalid);
+
+    for (@typeInfo(Kind).@"enum".fields) |field| {
+        if (field.name.len != 1) continue;
+
+        tokens[field.name[0]] = @enumFromInt(field.value);
+    }
+
+    break :blk tokens;
+};
+
 //for tokens made of multiple punctuation chars
 //e.g. merges[.add][.equal] == .add_equal.
 const merges = blk: {
@@ -47,14 +62,14 @@ const merges = blk: {
     var m: std.EnumArray(Kind, std.EnumArray(Kind, Kind)) = .initFill(.initFill(.invalid));
 
     for (@typeInfo(Kind).@"enum".fields) |field| {
-        const split_idx = std.mem.lastIndexOfScalar(u8, field.name, '_') orelse continue;
-        const prev = field.name[0..split_idx];
-        const next = field.name[split_idx+1..];
+        const name = field.name;
 
-        //ignore keywords and delimiters
-        if (std.mem.eql(u8, prev, "kw")) continue;
-        if (std.mem.eql(u8, prev, "l")) continue;
-        if (std.mem.eql(u8, prev, "r")) continue;
+        //token of lengt 2..3 made of punctuation?
+        if (name.len > 3 or name.len < 2) continue;
+        if (std.ascii.isAlphanumeric(name[0])) continue;
+
+        const prev = name[0..name.len-1];
+        const next = name[name.len-1..];
 
         const prev_enum = std.meta.stringToEnum(Kind, prev) orelse @compileError("invalid token name:" ++ prev);
         const next_enum = std.meta.stringToEnum(Kind, next) orelse @compileError("invalid token name:" ++ next);
@@ -97,23 +112,6 @@ const Tokenizer = struct {
         };
 
         const kind: Kind = switch (first_ch) {
-            '(' => .l_paren,
-            ')' => .r_paren,
-            '{' => .l_brace,
-            '}' => .r_brace,
-            '[' => .l_bracket,
-            ']' => .r_bracket,
-
-            '+' => .plus,
-            '-' => .minus,
-            '*' => .asterix,
-            '/' => .slash,
-            '%' => .percent,
-            '>' => .greater,
-            '<' => .less,
-            '!' => .bang,
-            '=' => .equal,
-
             'a'...'z', 'A'...'Z', '_' => blk: {
                 while (tokenizer.peekCh()) |ch| {
                     if (!(std.ascii.isAlphanumeric(ch) or ch == '_')) break;
@@ -136,7 +134,9 @@ const Tokenizer = struct {
                 break :blk kind;
             },
 
-            else => unreachable,
+            else => single_ch_tokens[first_ch],
+
+            0x80...0xff => @panic("todo: non ascii error"),
         };
 
         const prev = if (out.len != 0) out.items(.kind)[out.len-1] else .invalid;
@@ -152,7 +152,7 @@ const Tokenizer = struct {
 
 pub fn parse(src: []const u8, gpa: std.mem.Allocator) !std.MultiArrayList(Token) {
     var tokens = std.MultiArrayList(Token){};
-    try tokens.ensureTotalCapacity(gpa, src.len);
+    try tokens.ensureTotalCapacity(gpa, src.len / 4);
 
     var tokenizer = Tokenizer{.src = src, .i = 0};
 
@@ -172,15 +172,15 @@ test {
     ;
 
     const expected = [_]struct{Kind, []const u8}{
-        .{.l_paren, "("},
-        .{.r_paren, ")"},
+        .{.@"(", "("},
+        .{.@")", ")"},
         .{.ident, "ada_32"},
         .{.int, "0xadadAF9"},
         .{.float, "32.321"},
         .{.kw_and, "and"},
-        .{.less, "<"},
-        .{.equal, "="},
-        .{.equal_equal, "=="},
+        .{.@"<", "<"},
+        .{.@"=", "="},
+        .{.@"==", "=="},
         .{.eof, ""},
     };
 
