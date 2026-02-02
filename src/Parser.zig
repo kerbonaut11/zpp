@@ -60,7 +60,7 @@ inline fn addNode(p: *Parser, node: Node) Allocator.Error!Node.Idx {
     return idx;
 }
 
-inline fn addExtraData(p: *Parser, data: u32) Allocator.Error!void {
+inline fn addExtra(p: *Parser, data: u32) Allocator.Error!void {
     try p.ast.extra.append(p.gpa, data);
 }
 
@@ -136,9 +136,9 @@ fn block(p: *Parser) ErrorSet!Node.Idx {
 
     while (true) {
         switch (p.peek()) {
-            .kw_var, .kw_let => try p.addExtraData(try p.varDecl()),
+            .kw_var, .kw_let => try p.addExtra(try p.varDecl()),
 
-            else => try p.addExtraData(try p.expr()),
+            else => try p.addExtra(try p.expr()),
 
             .@"}" => break,
         }
