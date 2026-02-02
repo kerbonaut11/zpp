@@ -31,10 +31,10 @@ inline fn nextIf(p: *Parser, expected: Token.Kind) bool {
 }
 
 inline fn nextExpect(p: *Parser, comptime expected: Token.Kind) !void {
-    try nextExpectAny(p, &.{expected});
+    _ = try nextExpectAny(p, &.{expected});
 }
 
-inline fn nextExpectAny(p: *Parser, comptime expected: []const Token.Kind) !void {
+inline fn nextExpectAny(p: *Parser, comptime expected: []const Token.Kind) !Token.Kind {
     if (std.mem.indexOfScalar(Token.Kind, expected, p.peek()) == null) {
         return p.addError(.{
             .cause = .{.expected_tokens = expected},
@@ -43,7 +43,7 @@ inline fn nextExpectAny(p: *Parser, comptime expected: []const Token.Kind) !void
         });
     }
 
-    p.advance();
+    return p.next();
 }
 
 inline fn advance(p: *Parser) void {
@@ -151,8 +151,37 @@ fn block(p: *Parser) ErrorSet!Node.Idx {
 
 fn varDecl(p: *Parser) ErrorSet!Node.Idx {
     const main_token = p.token_idx;
-    try p.nextExpectAny(&.{.kw_var, .kw_let});
+    _ = try p.nextExpectAny(&.{.kw_var, .kw_let});
     try p.nextExpect(.ident);
+
+    const @"type" = if (p.nextIf(.@":")) try p.expr() else 0;
+
+    try p.nextExpect(.@"=");
+    const val = try p.expr();
+    
+    return p.addNode(.{.var_decl = .{
+        .main_token = main_token,
+        .type = @"type",
+        .val = val,
+    }});
+}
+
+fn fnDecl(p: *Parser) ErrorSet!Node.Idx {
+    const proto_idx: u32 = p.addExtra(0); //parameter count
+    const main_token = p.token_idx;
+
+    try p.nextExpect(.kw_fn);
+    try p.nextExpect(.ident);
+    try p.nextExpect(.@"(");
+
+    while (1) {
+        if (p.nextIf(.@")")) break;
+
+        p.ast.extra.items[proto_idx] += 1;
+        if (p.nextExpectAny(&.{.@")", .@","}) == .@")") break;
+    }
+
+    try p.nextExpect(.@")");
 
     const @"type" = if (p.nextIf(.@":")) try p.expr() else 0;
 

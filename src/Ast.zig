@@ -48,7 +48,9 @@ pub const Node = union(enum(u8)) {
 
     pub const FnDecl = struct {
         main_token: Token.Idx,
-        extra: u32,
+        //index into extra
+        //[param count, return type, param name token, param type]
+        proto: u32,
         body: Token.Idx,
     };
 
