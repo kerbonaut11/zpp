@@ -11,97 +11,103 @@ gpa: Allocator,
 ast: Ast,
 token_idx: Token.Idx,
 
-inline fn peekToken(parser: *Parser) Token {
-    return parser.ast.tokens.get(parser.token_idx);
+inline fn peek(p: *Parser) Token.Kind {
+    return p.ast.tokens.items(.kind)[p.token_idx];
 }
 
-inline fn nextToken(parser: *Parser) Token {
-    const token = parser.peekToken();
-    if (token.kind != .eof) parser.token_idx += 1;
+inline fn next(p: *Parser) Token.Kind {
+    const token = p.peek();
+    if (token != .eof) p.token_idx += 1;
     return token;
 }
 
-inline fn nextExpect(parser: *Parser, expected: Token.Kind) !void {
-    if (parser.peekToken().kind != expected) {
-        return parser.addError(.{
+inline fn nextIf(p: *Parser) Token.Kind {
+    const token = p.peek();
+    if (token.kind != .eof) p.token_idx += 1;
+    return token;
+}
+
+inline fn nextExpect(p: *Parser, expected: Token.Kind) !void {
+    if (p.peek() != expected) {
+        return p.addError(.{
             .cause = .{.expected_token = expected},
-            .first_token = parser.token_idx,
-            .last_token = parser.token_idx,
+            .first_token = p.token_idx,
+            .last_token = p.token_idx,
         });
     }
 
-    parser.advance();
+    p.advance();
 }
 
-inline fn advance(parser: *Parser) void {
-    parser.token_idx += 1;
+inline fn advance(p: *Parser) void {
+    p.token_idx += 1;
 }
 
-inline fn back(parser: *Parser) void {
-    parser.token_idx -= 1;
+inline fn back(p: *Parser) void {
+    p.token_idx -= 1;
 }
 
-inline fn addNode(parser: *Parser, node: Node) Allocator.Error!Node.Idx {
-    const idx: Node.Idx = @intCast(parser.ast.nodes.len);
-    try parser.ast.nodes.append(parser.gpa, node);
+inline fn addNode(p: *Parser, node: Node) Allocator.Error!Node.Idx {
+    const idx: Node.Idx = @intCast(p.ast.nodes.len);
+    try p.ast.nodes.append(p.gpa, node);
     return idx;
 }
 
-inline fn addExtraData(parser: *Parser, data: u32) Allocator.Error!void {
-    try parser.ast.extra_data.append(parser.gpa, data);
+inline fn addExtraData(p: *Parser, data: u32) Allocator.Error!void {
+    try p.ast.extra_data.append(p.gpa, data);
 }
 
-fn addError(parser: *Parser, err: Error) ErrorSet {
-    try parser.ast.errors.append(parser.gpa, err);
+fn addError(p: *Parser, err: Error) ErrorSet {
+    try p.ast.errors.append(p.gpa, err);
     return error.ParseFailed;
 }
 
-fn expr(parser: *Parser) ErrorSet!Node.Idx {
-    return parser.op(7);
+fn expr(p: *Parser) ErrorSet!Node.Idx {
+    return p.op(7);
 }
 
-fn op(parser: *Parser, precedence: u8) ErrorSet!Node.Idx {
+fn op(p: *Parser, precedence: u8) ErrorSet!Node.Idx {
     return if (Node.UnaryOp.precedence(.@"-") == precedence or Node.UnaryOp.precedence(.kw_not) == precedence)
-        parser.unaryOp(precedence)
+        p.unaryOp(precedence)
     else
-        parser.binaryOp(precedence);
+        p.binaryOp(precedence);
 }
 
-fn lowerPrecedenceOp(parser: *Parser, precedence: u8) ErrorSet!Node.Idx {
-    return if (precedence != 0) parser.op(precedence-1) else baseExpr(parser);
+fn lowerPrecedenceOp(p: *Parser, precedence: u8) ErrorSet!Node.Idx {
+    return if (precedence != 0) p.op(precedence-1) else baseExpr(p);
 }
 
-fn unaryOp(parser: *Parser, precedence: u8) ErrorSet!Node.Idx {
-    const op_token = parser.token_idx;
-    if (Node.UnaryOp.precedence(parser.peekToken().kind) != precedence) return parser.lowerPrecedenceOp(precedence);
-    parser.advance();
+fn unaryOp(p: *Parser, precedence: u8) ErrorSet!Node.Idx {
+    const op_token = p.token_idx;
+    if (Node.UnaryOp.precedence(p.peek()) != precedence) return p.lowerPrecedenceOp(precedence);
+    p.advance();
 
-    const val = try parser.op(precedence);
-    return parser.addNode(.{.unary_op = .{.op_token = op_token, .val = val}});
+    const val = try p.op(precedence);
+    return p.addNode(.{.unary_op = .{.op_token = op_token, .val = val}});
 }
 
-fn binaryOp(parser: *Parser, precedence: u8) ErrorSet!Node.Idx {
-    const lhs = try parser.lowerPrecedenceOp(precedence);
+fn binaryOp(p: *Parser, precedence: u8) ErrorSet!Node.Idx {
+    const lhs = try p.lowerPrecedenceOp(precedence);
     
-    const op_token = parser.token_idx;
-    if (Node.BinaryOp.precedence(parser.peekToken().kind) != precedence) return lhs;
-    parser.advance();
+    const op_token = p.token_idx;
+    if (Node.BinaryOp.precedence(p.peek()) != precedence) return lhs;
+    p.advance();
 
-    const rhs = try parser.op(precedence);
+    const rhs = try p.op(precedence);
 
-    return parser.addNode(.{.binary_op = .{.op_token = op_token, .lhs = lhs, .rhs = rhs}});
+    return p.addNode(.{.binary_op = .{.op_token = op_token, .lhs = lhs, .rhs = rhs}});
 }
 
-fn baseExpr(parser: *Parser) ErrorSet!Node.Idx {
-    const first_token = parser.token_idx;
+fn baseExpr(p: *Parser) ErrorSet!Node.Idx {
+    const first_token = p.token_idx;
 
-    switch (parser.peekToken().kind) {
+    switch (p.peek()) {
         .int => {
-            parser.advance();
-            return parser.addNode(.{.int = first_token});
+            p.advance();
+            return p.addNode(.{.int = first_token});
         },
 
-        .@"{" => return parser.block(),
+        .@"{" => return p.block(),
 
         else => {
             const err = Error{
@@ -109,23 +115,23 @@ fn baseExpr(parser: *Parser) ErrorSet!Node.Idx {
                 .first_token = first_token,
                 .last_token = first_token,
             };
-            std.debug.print("{}\n", .{parser.peekToken()});
-            return parser.addError(err);
+            std.debug.print("{}\n", .{p.peek()});
+            return p.addError(err);
         },
     }
 }
 
-fn block(parser: *Parser) ErrorSet!Node.Idx {
-    try parser.nextExpect(.@"{");
+fn block(p: *Parser) ErrorSet!Node.Idx {
+    try p.nextExpect(.@"{");
 
-    const statement_idx: u32 = @intCast(parser.ast.extra_data.items.len);
+    const statement_idx: u32 = @intCast(p.ast.extra_data.items.len);
     var statement_count: u32 = 0;
 
     while (true) {
-        switch (parser.peekToken().kind) {
-            .kw_var, .kw_let => try parser.addExtraData(try parser.varDecl()),
+        switch (p.peek()) {
+            .kw_var, .kw_let => try p.addExtraData(try p.varDecl()),
 
-            else => try parser.addExtraData(try parser.expr()),
+            else => try p.addExtraData(try p.expr()),
 
             .@"}" => break,
         }
@@ -133,18 +139,18 @@ fn block(parser: *Parser) ErrorSet!Node.Idx {
         statement_count += 1;
     }
 
-    return parser.addNode(.{.block = .{.statement_idx = statement_idx, .statement_count = statement_count}});
+    return p.addNode(.{.block = .{.statement_idx = statement_idx, .statement_count = statement_count}});
 }
 
-fn varDecl(parser: *Parser) ErrorSet!Node.Idx {
-    _ = parser;
+fn varDecl(p: *Parser) ErrorSet!Node.Idx {
+    _ = p;
     @panic("todo");
 }
 
 
 pub fn parse(src: []const u8, gpa: Allocator) !Ast {
     const tokens = try Token.parse(src, gpa);
-    var parser = Parser{
+    var p = Parser{
         .gpa = gpa,
         .token_idx = 0,
         .ast = .{
@@ -156,11 +162,11 @@ pub fn parse(src: []const u8, gpa: Allocator) !Ast {
         },
     };
 
-    try parser.ast.nodes.ensureTotalCapacity(gpa, tokens.len*2);
-    _ = try parser.addNode(.invalid);
+    try p.ast.nodes.ensureTotalCapacity(gpa, tokens.len*2);
+    _ = try p.addNode(.invalid);
 
-    const root = try parser.op(Node.BinaryOp.precedence(.kw_and).?);
-    parser.ast.nodes.set(0, .{.root = root});
+    const root = try p.op(Node.BinaryOp.precedence(.kw_and).?);
+    p.ast.nodes.set(0, .{.root = root});
 
-    return parser.ast;
+    return p.ast;
 }
