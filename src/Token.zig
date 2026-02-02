@@ -6,7 +6,7 @@ pub const Kind = enum(u8) {
     @"{", @"}",
     @"[", @"]",
 
-    @"+", @"-", @"*", @"/", @"%", @"=", @"!", @">", @"<", @"&", @"|", @"^", @".",
+    @"+", @"-", @"*", @"/", @"%", @"=", @"!", @">", @"<", @"&", @"|", @"^", @".", @":",
     @"==", @"!=", @">=", @"<=",
     @">>", @"<<",
 
@@ -152,7 +152,7 @@ const Tokenizer = struct {
 
 pub fn parse(src: []const u8, gpa: std.mem.Allocator) !std.MultiArrayList(Token) {
     var tokens = std.MultiArrayList(Token){};
-    try tokens.ensureTotalCapacity(gpa, src.len / 4);
+    try tokens.ensureTotalCapacity(gpa, src.len / 4 + 1000);
 
     var tokenizer = Tokenizer{.src = src, .i = 0};
 

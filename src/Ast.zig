@@ -29,7 +29,7 @@ pub const Node = union(enum(u8)) {
                 .@"+", .@"-" => 2,
                 .@"<<", .@">>" => 3,
                 .@"&", .@"|", .@"^" => 4,
-                .@"==", .@"!=", .@">", .@">=", .@"=", .@"<=" => 5,
+                .@"==", .@"!=", .@">", .@">=", .@"<", .@"<=" => 5,
                 .kw_and, .kw_or => 7,
                 else => null,
             };
@@ -78,7 +78,7 @@ extra_data: std.ArrayList(u32),
 errors: std.ArrayList(Error),
 
 
-inline fn getTokenSrc(ast: *const Ast, token: Token.Idx) []const u8 {
+inline fn tokenSrc(ast: *const Ast, token: Token.Idx) []const u8 {
     const loc = ast.tokens.items(.loc)[token];
     return ast.src[loc.start..loc.end];
 }
@@ -90,17 +90,17 @@ pub fn dumpNode(ast: *const Ast, w: *std.io.Writer, node: Node.Idx, depth: u32) 
     try w.splatByteAll(' ', depth*2);
 
     switch (ast.nodes.get(node)) {
-        .int => |token| try w.print("{s}\n", .{ast.getTokenSrc(token)}),
+        .int => |token| try w.print("{s}\n", .{ast.tokenSrc(token)}),
 
         .unary_op => |op| {
-            try w.print("{s} {{\n", .{ast.getTokenSrc(op.op_token)});
+            try w.print("{s} {{\n", .{ast.tokenSrc(op.op_token)});
             ast.dumpNode(w, op.val, depth+1) catch unreachable;
             try w.splatByteAll(' ', depth*2);
             try w.print("}}\n", .{});
         },
 
         .binary_op => |op| {
-            try w.print("{s} {{\n", .{ast.getTokenSrc(op.op_token)});
+            try w.print("{s} {{\n", .{ast.tokenSrc(op.op_token)});
             try ast.dumpNode(w, op.lhs, depth+1);
             try ast.dumpNode(w, op.rhs, depth+1);
             try w.splatByteAll(' ', depth*2);
@@ -117,8 +117,11 @@ pub fn dumpNode(ast: *const Ast, w: *std.io.Writer, node: Node.Idx, depth: u32) 
         },
 
         .var_decl => |decl| {
-            _ = decl;
-            @panic("todo");
+            try w.print("{s} {s} {{\n", .{ast.tokenSrc(decl.main_token), ast.tokenSrc(decl.main_token+1)});
+            if (decl.type != 0) try ast.dumpNode(w, decl.type, depth+1);
+            try ast.dumpNode(w, decl.val, depth+1);
+            try w.splatByteAll(' ', depth*2);
+            try w.print("}}\n", .{});
         },
 
         .fn_decl => |decl| {
@@ -139,10 +142,11 @@ pub fn dump(ast: Ast) !void {
 }
 
 test {
-    const src = "not 32 + {1*-2} == 3";
+    const src = "{let x: 1 = 34}";
     var ast = try parse(src, std.testing.allocator);
     defer ast.nodes.deinit(std.testing.allocator);
     defer ast.tokens.deinit(std.testing.allocator);
+    defer ast.extra_data.deinit(std.testing.allocator);
 
     try ast.dump();
 }
