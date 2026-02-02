@@ -48,12 +48,12 @@ pub const Node = union(enum(u8)) {
 
     pub const FnDecl = struct {
         main_token: Token.Idx,
-        extra_data: u32,
+        extra: u32,
         body: Token.Idx,
     };
 
     pub const Block = struct {
-        statement_idx: u32, //idx into extra_data
+        statement_idx: u32, //idx into extra
         statement_count: u32,
     };
 
@@ -74,7 +74,7 @@ pub const Node = union(enum(u8)) {
 src: []const u8,
 tokens: std.MultiArrayList(Token),
 nodes: std.MultiArrayList(Node),
-extra_data: std.ArrayList(u32),
+extra: std.ArrayList(u32),
 errors: std.ArrayList(Error),
 
 
@@ -109,7 +109,7 @@ pub fn dumpNode(ast: *const Ast, w: *std.io.Writer, node: Node.Idx, depth: u32) 
 
         .block => |block| {
             try w.print("{{\n", .{});
-            for (ast.extra_data.items[block.statement_idx..][0..block.statement_count]) |i| {
+            for (ast.extra.items[block.statement_idx..][0..block.statement_count]) |i| {
                 try ast.dumpNode(w, i, depth+1);
             }
             try w.splatByteAll(' ', depth*2);
@@ -146,7 +146,7 @@ test {
     var ast = try parse(src, std.testing.allocator);
     defer ast.nodes.deinit(std.testing.allocator);
     defer ast.tokens.deinit(std.testing.allocator);
-    defer ast.extra_data.deinit(std.testing.allocator);
+    defer ast.extra.deinit(std.testing.allocator);
 
     try ast.dump();
 }

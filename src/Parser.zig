@@ -61,7 +61,7 @@ inline fn addNode(p: *Parser, node: Node) Allocator.Error!Node.Idx {
 }
 
 inline fn addExtraData(p: *Parser, data: u32) Allocator.Error!void {
-    try p.ast.extra_data.append(p.gpa, data);
+    try p.ast.extra.append(p.gpa, data);
 }
 
 fn addError(p: *Parser, err: Error) ErrorSet {
@@ -131,7 +131,7 @@ fn baseExpr(p: *Parser) ErrorSet!Node.Idx {
 fn block(p: *Parser) ErrorSet!Node.Idx {
     try p.nextExpect(.@"{");
 
-    const statement_idx: u32 = @intCast(p.ast.extra_data.items.len);
+    const statement_idx: u32 = @intCast(p.ast.extra.items.len);
     var statement_count: u32 = 0;
 
     while (true) {
@@ -155,7 +155,6 @@ fn varDecl(p: *Parser) ErrorSet!Node.Idx {
     try p.nextExpect(.ident);
 
     const @"type" = if (p.nextIf(.@":")) try p.expr() else 0;
-    std.debug.print("{} {}\n", .{main_token, p.token_idx});
 
     try p.nextExpect(.@"=");
     const val = try p.expr();
@@ -177,7 +176,7 @@ pub fn parse(src: []const u8, gpa: Allocator) !Ast {
             .src = src,
             .tokens = tokens,
             .nodes = .empty,
-            .extra_data = .empty,
+            .extra = .empty,
             .errors = .empty,
         },
     };
