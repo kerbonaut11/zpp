@@ -14,7 +14,7 @@ pub fn dumpNode(ast: *const Ast, w: *std.Io.Writer, node: Node.Idx, label: []con
     }
 
     switch (ast.nodes.get(node)) {
-        .int => |token| try w.print("{s}\n", .{ast.tokenSrc(token)}),
+        .int, .float, .ident, .bool, .bool_type, .void_type => |token| try w.print("{s}\n", .{ast.tokenSrc(token)}),
 
         .unary_op => |op| {
             try w.print("{s} {{\n", .{ast.tokenSrc(op.op_token)});
@@ -48,7 +48,7 @@ pub fn dumpNode(ast: *const Ast, w: *std.Io.Writer, node: Node.Idx, label: []con
         .fn_decl => |decl| {
             try w.print("{s} {s} {{\n", .{ast.tokenSrc(decl.main_token), ast.tokenSrc(decl.main_token+1)});
             for (decl.params(ast)) |param| {
-                try dumpNode(ast, w, param.type, ast.tokenSrc(param.type), depth+1);
+                try dumpNode(ast, w, param.type, ast.tokenSrc(param.name), depth+1);
             }
             try dumpNode(ast, w, decl.returnType(ast), "return", depth+1);
             try dumpNode(ast, w, decl.body, "body", depth+1);

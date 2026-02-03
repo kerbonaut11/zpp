@@ -110,11 +110,14 @@ fn binaryOp(p: *Parser, precedence: u8) ErrorSet!Node.Idx {
 fn baseExpr(p: *Parser) ErrorSet!Node.Idx {
     const first_token = p.token_idx;
 
-    switch (p.peek()) {
-        .int => {
-            p.advance();
-            return p.addNode(.{.int = first_token});
-        },
+    return switch (p.peek()) {
+        .int   => p.singleTokenNode("int"),
+        .float => p.singleTokenNode("float"),
+        .ident => p.singleTokenNode("ident"),
+        .kw_true, .kw_false => p.singleTokenNode("bool"),
+
+        .kw_void => p.singleTokenNode("void_type"),
+        .kw_bool => p.singleTokenNode("bool_type"),
 
         .@"{" => return p.block(),
 
@@ -127,7 +130,13 @@ fn baseExpr(p: *Parser) ErrorSet!Node.Idx {
             std.debug.print("{}\n", .{p.peek()});
             return p.addError(err);
         },
-    }
+    };
+}
+
+pub fn singleTokenNode(p: *Parser, comptime name: []const u8) Allocator.Error!Node.Idx {
+    const idx = p.token_idx;
+    p.advance();
+    return p.addNode(@unionInit(Node, name, idx));
 }
 
 fn block(p: *Parser) ErrorSet!Node.Idx {
@@ -180,16 +189,16 @@ fn fnDecl(p: *Parser) ErrorSet!Node.Idx {
     while (true) {
         if (p.nextIf(.@")")) break;
 
-        _ = try p.addExtra(p.token_idx);
+        try p.addExtra(p.token_idx);
         try p.nextExpect(.ident);
         try p.nextExpect(.@":");
-        _ = try p.addExtra(try p.expr());
+        try p.addExtra(try p.expr());
 
         p.ast.extra.items[proto_idx] += 1;
         if (try p.nextExpectAny(&.{.@")", .@","}) == .@")") break;
     }
 
-     _ = try p.addExtra(try p.expr());
+    try p.addExtra(try p.expr());
 
     const body = try p.block();
     

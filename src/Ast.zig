@@ -74,6 +74,13 @@ pub const Node = union(enum(u8)) {
     root: Node.Idx,
 
     int: Token.Idx,
+    bool: Token.Idx,
+    float: Token.Idx,
+    ident: Token.Idx,
+
+    void_type: Token.Idx,
+    bool_type: Token.Idx,
+
     unary_op: UnaryOp,
     binary_op: BinaryOp,
     block: Block,
@@ -107,7 +114,7 @@ pub fn dump(ast: *const Ast) !void {
 }
 
 test {
-    const src = "fn a() 1 {let x: 1 = 34}";
+    const src = "fn a(b: u32, c: u64) void {let x: 1 = 34}";
     var ast = try parse(src, std.testing.allocator);
     defer ast.nodes.deinit(std.testing.allocator);
     defer ast.tokens.deinit(std.testing.allocator);
