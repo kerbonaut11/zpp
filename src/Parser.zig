@@ -10,6 +10,7 @@ pub const ErrorSet = error {ParseFailed} || Allocator.Error;
 gpa: Allocator,
 ast: Ast,
 token_idx: Token.Idx,
+extra_idx: Ast.ExtraIdx,
 
 inline fn peek(p: *Parser) Token.Kind {
     return p.ast.tokens.items(.kind)[p.token_idx];
@@ -61,6 +62,7 @@ inline fn addNode(p: *Parser, node: Node) Allocator.Error!Node.Idx {
 }
 
 inline fn addExtra(p: *Parser, data: u32) Allocator.Error!void {
+    p.extra_idx += 1;
     try p.ast.extra.append(p.gpa, data);
 }
 
@@ -131,7 +133,7 @@ fn baseExpr(p: *Parser) ErrorSet!Node.Idx {
 fn block(p: *Parser) ErrorSet!Node.Idx {
     try p.nextExpect(.@"{");
 
-    const statement_idx: u32 = @intCast(p.ast.extra.items.len);
+    const statement_idx: u32 = p.extra_idx;
     var statement_count: u32 = 0;
 
     while (true) {
@@ -167,31 +169,34 @@ fn varDecl(p: *Parser) ErrorSet!Node.Idx {
 }
 
 fn fnDecl(p: *Parser) ErrorSet!Node.Idx {
-    const proto_idx: u32 = p.addExtra(0); //parameter count
+    const proto_idx: Ast.ExtraIdx = p.extra_idx;
+    try p.addExtra(0); //parameter count
     const main_token = p.token_idx;
 
     try p.nextExpect(.kw_fn);
     try p.nextExpect(.ident);
     try p.nextExpect(.@"(");
 
-    while (1) {
+    while (true) {
         if (p.nextIf(.@")")) break;
 
+        _ = try p.addExtra(p.token_idx);
+        try p.nextExpect(.ident);
+        try p.nextExpect(.@":");
+        _ = try p.addExtra(try p.expr());
+
         p.ast.extra.items[proto_idx] += 1;
-        if (p.nextExpectAny(&.{.@")", .@","}) == .@")") break;
+        if (try p.nextExpectAny(&.{.@")", .@","}) == .@")") break;
     }
 
-    try p.nextExpect(.@")");
+     _ = try p.addExtra(try p.expr());
 
-    const @"type" = if (p.nextIf(.@":")) try p.expr() else 0;
-
-    try p.nextExpect(.@"=");
-    const val = try p.expr();
+    const body = try p.block();
     
-    return p.addNode(.{.var_decl = .{
+    return p.addNode(.{.fn_decl = .{
         .main_token = main_token,
-        .type = @"type",
-        .val = val,
+        .proto = proto_idx,
+        .body = body,
     }});
 }
 
@@ -201,6 +206,7 @@ pub fn parse(src: []const u8, gpa: Allocator) !Ast {
     var p = Parser{
         .gpa = gpa,
         .token_idx = 0,
+        .extra_idx = 0,
         .ast = .{
             .src = src,
             .tokens = tokens,
@@ -213,7 +219,7 @@ pub fn parse(src: []const u8, gpa: Allocator) !Ast {
     try p.ast.nodes.ensureTotalCapacity(gpa, tokens.len*2);
     _ = try p.addNode(.invalid);
 
-    const root = try p.op(Node.BinaryOp.precedence(.kw_and).?);
+    const root = try p.fnDecl();
     p.ast.nodes.set(0, .{.root = root});
 
     return p.ast;

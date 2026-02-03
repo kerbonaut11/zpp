@@ -42,13 +42,17 @@ pub fn dumpNode(ast: *const Ast, w: *std.Io.Writer, node: Node.Idx, label: []con
             try w.print("{s} {s} {{\n", .{ast.tokenSrc(decl.main_token), ast.tokenSrc(decl.main_token+1)});
             if (decl.type != 0) try dumpNode(ast, w, decl.type, "type", depth+1);
             try dumpNode(ast, w, decl.val, "val", depth+1);
-            try w.splatByteAll(' ', depth*2);
-            try w.print("}}\n", .{});
+            try printCloseBrace(w, depth);
         },
 
         .fn_decl => |decl| {
-            _ = decl;
-            @panic("todo");
+            try w.print("{s} {s} {{\n", .{ast.tokenSrc(decl.main_token), ast.tokenSrc(decl.main_token+1)});
+            for (decl.params(ast)) |param| {
+                try dumpNode(ast, w, param.type, ast.tokenSrc(param.type), depth+1);
+            }
+            try dumpNode(ast, w, decl.returnType(ast), "return", depth+1);
+            try dumpNode(ast, w, decl.body, "body", depth+1);
+            try printCloseBrace(w, depth);
         },
 
         .invalid, .root => unreachable,

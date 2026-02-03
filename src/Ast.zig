@@ -4,6 +4,7 @@ const Token = @import("Token.zig");
 const Ast = @This();
 const Error = @import("Error.zig");
 const Parser = @import("Parser.zig");
+pub const ExtraIdx = u32;
 
 pub const Node = union(enum(u8)) {
     pub const Idx = u32;
@@ -49,13 +50,23 @@ pub const Node = union(enum(u8)) {
     pub const FnDecl = struct {
         main_token: Token.Idx,
         //index into extra
-        //[param count, return type, param name token, param type]
-        proto: u32,
+        //[param count, param name token, param type, return type]
+        proto: ExtraIdx,
         body: Token.Idx,
+
+        pub fn params(func: FnDecl, ast: *const Ast) []struct{name: Token.Idx, type: Node.Idx} {
+            const len = ast.extra.items[func.proto];
+            return @ptrCast(ast.extra.items[func.proto+1..][0..len*2]);
+        }
+
+        pub fn returnType(func: FnDecl, ast: *const Ast) Node.Idx {
+            const len = ast.extra.items[func.proto];
+            return ast.extra.items[func.proto+1+len*2];
+        }
     };
 
     pub const Block = struct {
-        statement_idx: u32, //idx into extra
+        statement_idx: ExtraIdx,
         statement_count: u32,
     };
 
@@ -96,7 +107,7 @@ pub fn dump(ast: *const Ast) !void {
 }
 
 test {
-    const src = "{let x: 1 = 34}";
+    const src = "fn a() 1 {let x: 1 = 34}";
     var ast = try parse(src, std.testing.allocator);
     defer ast.nodes.deinit(std.testing.allocator);
     defer ast.tokens.deinit(std.testing.allocator);
